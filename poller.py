@@ -284,6 +284,7 @@ def post_to_slack(item):
         print(json.dumps(payload, indent=2))
         return
     r = requests.post(SLACK_WEBHOOK, json=payload, timeout=10)
+    print(f"[slack] {item['id']}: status={r.status_code} body={r.text!r}")
     r.raise_for_status()
 
 
