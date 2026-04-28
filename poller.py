@@ -116,11 +116,18 @@ def fetch_nvd():
         }
         r = requests.get("https://services.nvd.nist.gov/rest/json/cves/2.0",
                          headers=headers, params=params, timeout=60)
-        # NVD returns 404 instead of 200/empty when no records match a tight window.
+        msg = r.headers.get("message", "")
         if r.status_code == 404:
+            print(f"[nvd] {sev}: 404 (message: {msg or 'none'})", file=sys.stderr)
+            continue
+        if r.status_code == 403:
+            print(f"[nvd] {sev}: 403 forbidden — likely rate-limit or invalid API key (message: {msg or 'none'})", file=sys.stderr)
             continue
         r.raise_for_status()
-        for vuln in r.json().get("vulnerabilities", []):
+        body = r.json()
+        print(f"[nvd] {sev}: {body.get('totalResults', 0)} totalResults, {len(body.get('vulnerabilities', []))} returned",
+              file=sys.stderr)
+        for vuln in body.get("vulnerabilities", []):
             cve = vuln["cve"]
             cve_id = cve["id"]
             descs = cve.get("descriptions", [])
