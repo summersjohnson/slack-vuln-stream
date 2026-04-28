@@ -21,11 +21,21 @@ OVERLAP_MINUTES = 15
 STATE_RETENTION_DAYS = 30
 USER_AGENT = "macmillan-vuln-stream/1.0 (security-monitoring)"
 
+# NVD sourceIdentifier values for the vendor CNAs we care about.
+NVD_VENDOR_ASSIGNERS = {
+    "psirt@adobe.com":         "Adobe",
+    "secalert_us@oracle.com":  "Oracle",
+    "security@vmware.com":     "VMware",
+    "psirt@broadcom.com":      "Broadcom",
+    "psirt@crowdstrike.com":   "CrowdStrike",
+}
+
 # Adobe, Oracle, VMware/Broadcom, and CrowdStrike no longer publish working
-# public RSS for security advisories — they moved to HTML-only pages. All four
-# are CNAs, so their CRITICAL/HIGH advisories appear in NVD with vendor
-# attribution. See README. List kept empty until a working strategy is added.
+# public RSS. They are all CNAs, so their advisories appear in NVD and get
+# tagged via NVD_VENDOR_ASSIGNERS above.
 VENDOR_FEEDS: list[dict] = []
+
+KEV_FEED_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
 
 def load_state():
@@ -111,6 +121,7 @@ def fetch_nvd():
             cve_id = cve["id"]
             descs = cve.get("descriptions", [])
             title = next((d["value"] for d in descs if d.get("lang") == "en"), cve_id)
+            vendor = NVD_VENDOR_ASSIGNERS.get(cve.get("sourceIdentifier"))
             items.append({
                 "source": "NVD",
                 "id": cve_id,
@@ -119,7 +130,39 @@ def fetch_nvd():
                 "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}",
                 "published": cve.get("published"),
                 "cve": cve_id,
+                "vendor": vendor,
             })
+    return items
+
+
+def fetch_kev():
+    items = []
+    r = requests.get(KEV_FEED_URL, headers={"User-Agent": USER_AGENT}, timeout=30)
+    r.raise_for_status()
+    since_date = lookback_start().date()
+    for v in r.json().get("vulnerabilities", []):
+        try:
+            added = datetime.strptime(v.get("dateAdded", ""), "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if added < since_date:
+            continue
+        cve = v.get("cveID")
+        if not cve:
+            continue
+        product = " ".join(p for p in (v.get("vendorProject"), v.get("product")) if p)
+        name = v.get("vulnerabilityName") or v.get("shortDescription", "")
+        title = (f"{product}: {name}" if product else name)[:300]
+        items.append({
+            "source": "CISA KEV (actively exploited)",
+            "id": f"KEV:{cve}",
+            "title": title,
+            "severity": "KEV",
+            "url": f"https://nvd.nist.gov/vuln/detail/{cve}",
+            "published": v.get("dateAdded"),
+            "cve": cve,
+            "kev_ransomware": v.get("knownRansomwareCampaignUse") == "Known",
+        })
     return items
 
 
@@ -175,20 +218,35 @@ def fetch_vendors():
     return items
 
 
+def dedup_key(item):
+    # KEV items use a distinct key so a CVE can post twice: once when the
+    # advisory drops, again when CISA flags it actively exploited.
+    if item["severity"] == "KEV":
+        return f"kev:{item.get('cve') or item['id']}"
+    return item.get("cve") or item["id"]
+
+
 def dedup(items):
     by_key = {}
     priority = {"NVD": 3, "GitHub Advisory Database": 2}
     for item in items:
-        key = item.get("cve") or item["id"]
+        key = dedup_key(item)
         existing = by_key.get(key)
         if existing is None or priority.get(item["source"], 0) > priority.get(existing["source"], 0):
+            # Merge: keep vendor tag if either side has it.
+            if existing and existing.get("vendor") and not item.get("vendor"):
+                item["vendor"] = existing["vendor"]
             by_key[key] = item
     return list(by_key.values())
 
 
 def slack_blocks(item):
-    emoji = {"CRITICAL": ":rotating_light:", "HIGH": ":warning:", "VENDOR": ":shield:"}
+    emoji = {"CRITICAL": ":rotating_light:", "HIGH": ":warning:", "KEV": ":fire:"}
     head = f"{emoji.get(item['severity'], ':grey_question:')} {item['severity']} — {item['source']}"
+    if item.get("vendor"):
+        head = f":bell: {item['vendor']}  |  " + head
+    if item.get("kev_ransomware"):
+        head += "  |  ransomware"
     title_link = f"*<{item['url']}|{item['id']}>*\n{item['title']}" if item.get("url") else f"*{item['id']}*\n{item['title']}"
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": head}},
@@ -223,7 +281,7 @@ def main():
         sys.exit("SLACK_WEBHOOK_URL is not set")
     state = load_state()
     raw = []
-    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors):
+    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev):
         try:
             raw.extend(fetcher())
         except Exception as e:
@@ -231,7 +289,7 @@ def main():
     items = dedup(raw)
     new_items = []
     for item in items:
-        key = item.get("cve") or item["id"]
+        key = dedup_key(item)
         if is_seen(state, key):
             continue
         if item.get("cve"):
