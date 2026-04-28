@@ -8,7 +8,7 @@ Hourly automation that polls public vulnerability feeds and posts new items to a
 - **Language:** Python 3.12 with `requests` and `feedparser`.
 - **Delivery:** Slack Incoming Webhook (Block Kit formatted messages).
 - **Dedup:** `state.json` is committed back to the repo each run; old IDs prune after 30 days.
-- **Lookback:** 4 hours per run with state-based dedup. The cron is hourly, but the wider window absorbs quiet periods and the dedup prevents reposts.
+- **Lookback:** 4 hours for vuln feeds (NVD, GHSA, KEV) and 24 hours for slower news/advisory feeds (CISA Advisories, The Hacker News, SANS ISC). State-based dedup prevents reposts.
 - **Anti-flood cap:** at most 25 messages per run.
 
 ## Sources

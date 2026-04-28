@@ -18,6 +18,7 @@ DRY_RUN = "--dry-run" in sys.argv
 TEST_SLACK = "--test-slack" in sys.argv
 
 LOOKBACK_HOURS = 4
+NEWS_LOOKBACK_HOURS = 24  # CISA advisories + THN + SANS publish slowly; wider window backfills past day.
 OVERLAP_MINUTES = 15
 STATE_RETENTION_DAYS = 30
 # Cap items posted per run to prevent flooding on the first run after a long
@@ -91,6 +92,10 @@ def is_seen(state, ident):
 
 def lookback_start():
     return datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS, minutes=OVERLAP_MINUTES)
+
+
+def news_lookback_start():
+    return datetime.now(timezone.utc) - timedelta(hours=NEWS_LOOKBACK_HOURS, minutes=OVERLAP_MINUTES)
 
 
 def fetch_github():
@@ -233,7 +238,7 @@ def fetch_cisa():
     if parsed.bozo and not parsed.entries:
         print(f"[warn] CISA parse error: {parsed.get('bozo_exception')}", file=sys.stderr)
         return items
-    since = lookback_start()
+    since = news_lookback_start()
     for entry in parsed.entries:
         tm = entry.get("published_parsed") or entry.get("updated_parsed")
         if not tm:
@@ -265,7 +270,7 @@ def fetch_hackernews():
     if parsed.bozo and not parsed.entries:
         print(f"[warn] HackerNews parse error: {parsed.get('bozo_exception')}", file=sys.stderr)
         return items
-    since = lookback_start()
+    since = news_lookback_start()
     for entry in parsed.entries:
         tm = entry.get("published_parsed") or entry.get("updated_parsed")
         if not tm:
@@ -297,7 +302,7 @@ def fetch_sans():
     if parsed.bozo and not parsed.entries:
         print(f"[warn] SANS parse error: {parsed.get('bozo_exception')}", file=sys.stderr)
         return items
-    since = lookback_start()
+    since = news_lookback_start()
     for entry in parsed.entries:
         tm = entry.get("published_parsed") or entry.get("updated_parsed")
         if not tm:
