@@ -1,6 +1,6 @@
 # Slack Vuln Stream
 
-Hourly automation that polls public vulnerability feeds and posts new CRITICAL / HIGH items to a dedicated Slack channel.
+Hourly automation that polls public vulnerability feeds and posts new items to a dedicated Slack channel — CRITICAL / HIGH CVEs, actively-exploited vulnerabilities (CISA KEV), government cybersecurity advisories (CISA), and Microsoft Patch Tuesday roll-ups.
 
 ## Design
 
@@ -23,14 +23,16 @@ Hourly automation that polls public vulnerability feeds and posts new CRITICAL /
 | OSV.dev | `api.osv.dev/v1/vulns/{id}` | Enrichment — adds affected ecosystems to CVE posts |
 | Vendor CNA tagging | NVD `sourceIdentifier` field | Tags posts from Adobe, Oracle, VMware, Broadcom, CrowdStrike |
 
-Note: those four vendors no longer publish working public RSS for security advisories. They are all CVE Numbering Authorities, so their CRITICAL / HIGH advisories appear in NVD and get a 🔔 vendor tag in the Slack header.
+Note: those four vendors no longer publish working public RSS for security advisories. They are all CVE Numbering Authorities, so their CRITICAL / HIGH advisories appear in NVD and get a 🔔 vendor tag in the Slack header. Microsoft is tagged separately via the MSRC source.
 
 ## Functionality
 
-- Filters every fetched item by severity → only CRITICAL and HIGH (plus all KEV entries, which are by definition high-impact).
-- Within a single run, GHSA + NVD entries for the same CVE are merged into one post (NVD wins, vendor tag preserved).
-- KEV entries use a distinct dedup key, so a CVE can post twice — once when it lands in NVD/GHSA, again when CISA promotes it to "actively exploited."
-- Slack message format: severity emoji (🚨 CRITICAL, ⚠️ HIGH, 🔥 KEV), 🔔 prefix when from a tagged vendor, ransomware tag when CISA flags ransomware-linked exploitation, fields for CVE ID, publication date, and affected ecosystems.
+- **Severity filter:** CVE-based sources (NVD, GHSA) post only CRITICAL and HIGH. KEV posts every entry (all KEV is by definition high-impact). CISA Cybersecurity Advisories post every entry (gov-curated signal). MSRC posts one summary per release with embedded counts.
+- **Within-run dedup:** GHSA + NVD entries for the same CVE merge into one post (NVD wins, vendor tag preserved).
+- **Cross-run dedup:** KEV entries use a distinct dedup key, so a CVE can post twice — once when it lands in NVD/GHSA, again when CISA promotes it to "actively exploited."
+- **Slack header:** `[🔔 Vendor | ] <severity-emoji> <SEVERITY> — <Source> [ | ransomware]`
+- **Severity emoji:** 🚨 CRITICAL · ⚠️ HIGH · 🔥 KEV · 📣 ADVISORY (CISA general)
+- **Body fields:** CVE ID, publication date, affected ecosystems (from OSV enrichment)
 
 ## Repo structure
 
