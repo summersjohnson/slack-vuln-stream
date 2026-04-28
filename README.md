@@ -20,6 +20,7 @@ Hourly automation that polls public vulnerability feeds and posts new items to a
 | CISA KEV | `cisa.gov/.../known_exploited_vulnerabilities.json` | Actively-exploited-in-the-wild flag |
 | CISA Cybersecurity Advisories | `cisa.gov/cybersecurity-advisories/all.xml` | Government-curated alerts (joint FBI/NSA bulletins, ICS, etc.) |
 | Microsoft MSRC | `api.msrc.microsoft.com/cvrf/v3.0/updates` | One summary per Patch Tuesday release (vuln counts) |
+| The Hacker News | `feeds.feedburner.com/TheHackersNews` | All-topics cybersecurity news feed (~5-10 articles/day) |
 | OSV.dev | `api.osv.dev/v1/vulns/{id}` | Enrichment — adds affected ecosystems to CVE posts |
 | Vendor CNA tagging | NVD `sourceIdentifier` field | Tags posts from Adobe, Oracle, VMware, Broadcom, CrowdStrike |
 
@@ -31,7 +32,7 @@ Note: those four vendors no longer publish working public RSS for security advis
 - **Within-run dedup:** GHSA + NVD entries for the same CVE merge into one post (NVD wins, vendor tag preserved).
 - **Cross-run dedup:** KEV entries use a distinct dedup key, so a CVE can post twice — once when it lands in NVD/GHSA, again when CISA promotes it to "actively exploited."
 - **Slack header:** `[🔔 Vendor | ] <severity-emoji> <SEVERITY> — <Source> [ | ransomware]`
-- **Severity emoji:** 🚨 CRITICAL · ⚠️ HIGH · 🔥 KEV · 📣 ADVISORY (CISA general)
+- **Severity emoji:** 🚨 CRITICAL · ⚠️ HIGH · 🔥 KEV · 📣 ADVISORY (CISA general) · 📰 NEWS (The Hacker News)
 - **Body fields:** CVE ID, publication date, affected ecosystems (from OSV enrichment)
 
 ## Repo structure

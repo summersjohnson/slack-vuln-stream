@@ -35,6 +35,7 @@ SEVERITY_EMOJI = {
     "HIGH":     ":warning:",
     "KEV":      ":fire:",
     "ADVISORY": ":mega:",
+    "NEWS":     ":newspaper:",
 }
 # Decorations layered onto the header in slack_blocks():
 #   :bell:  prepended when item came from a tracked vendor CNA (Adobe, Oracle,
@@ -58,6 +59,9 @@ VENDOR_FEEDS: list[dict] = []
 KEV_FEED_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 CISA_FEED_URL = "https://www.cisa.gov/cybersecurity-advisories/all.xml"
 MSRC_UPDATES_URL = "https://api.msrc.microsoft.com/cvrf/v3.0/updates"
+# The Hacker News — all-topics feed (~5-10 articles/day).
+# For a single topic, swap to: https://thehackernews.com/feeds/posts/default/-/{LABEL}
+THN_FEED_URL = "https://feeds.feedburner.com/TheHackersNews"
 
 
 def load_state():
@@ -247,6 +251,38 @@ def fetch_cisa():
     return items
 
 
+def fetch_hackernews():
+    items = []
+    try:
+        r = requests.get(THN_FEED_URL, headers={"User-Agent": USER_AGENT}, timeout=30)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[warn] HackerNews fetch failed: {e}", file=sys.stderr)
+        return items
+    parsed = feedparser.parse(r.content)
+    if parsed.bozo and not parsed.entries:
+        print(f"[warn] HackerNews parse error: {parsed.get('bozo_exception')}", file=sys.stderr)
+        return items
+    since = lookback_start()
+    for entry in parsed.entries:
+        tm = entry.get("published_parsed") or entry.get("updated_parsed")
+        if not tm:
+            continue
+        published = datetime(*tm[:6], tzinfo=timezone.utc)
+        if published < since:
+            continue
+        items.append({
+            "source": "The Hacker News",
+            "id": entry.get("id") or entry.get("link") or entry.get("title", ""),
+            "title": entry.get("title", "(untitled)")[:300],
+            "severity": "NEWS",
+            "url": entry.get("link", ""),
+            "published": published.isoformat(),
+            "cve": None,
+        })
+    return items
+
+
 def fetch_msrc():
     # MSRC publishes monthly (Patch Tuesday) plus occasional out-of-band.
     # We post one summary per release rather than per-CVE to avoid flooding.
@@ -407,7 +443,7 @@ def main():
         return
     state = load_state()
     raw = []
-    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev, fetch_cisa, fetch_msrc):
+    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev, fetch_cisa, fetch_msrc, fetch_hackernews):
         try:
             results = fetcher()
             print(f"[info] {fetcher.__name__}: {len(results)} item(s)")
