@@ -25,6 +25,22 @@ STATE_RETENTION_DAYS = 30
 MAX_POSTS_PER_RUN = 25
 USER_AGENT = "macmillan-vuln-stream/1.0 (security-monitoring)"
 
+# Slack header emoji per severity tier. Tiers come from each fetcher:
+#   CRITICAL  CVSS >= 9.0 (NVD, GHSA, MSRC summary if any criticals)
+#   HIGH      CVSS 7.0–8.9 (NVD, GHSA, MSRC summary if no criticals)
+#   KEV       CISA Known Exploited Vulnerabilities — actively exploited
+#   ADVISORY  CISA Cybersecurity Advisories — gov-curated alert (no CVSS)
+SEVERITY_EMOJI = {
+    "CRITICAL": ":rotating_light:",
+    "HIGH":     ":warning:",
+    "KEV":      ":fire:",
+    "ADVISORY": ":mega:",
+}
+# Decorations layered onto the header in slack_blocks():
+#   :bell:  prepended when item came from a tracked vendor CNA (Adobe, Oracle,
+#           VMware, Broadcom, CrowdStrike, Microsoft via MSRC)
+VENDOR_EMOJI = ":bell:"
+
 # NVD sourceIdentifier values for the vendor CNAs we care about.
 NVD_VENDOR_ASSIGNERS = {
     "psirt@adobe.com":         "Adobe",
@@ -339,10 +355,9 @@ def dedup(items):
 
 
 def slack_blocks(item):
-    emoji = {"CRITICAL": ":rotating_light:", "HIGH": ":warning:", "KEV": ":fire:", "ADVISORY": ":mega:"}
-    head = f"{emoji.get(item['severity'], ':grey_question:')} {item['severity']} — {item['source']}"
+    head = f"{SEVERITY_EMOJI.get(item['severity'], ':grey_question:')} {item['severity']} — {item['source']}"
     if item.get("vendor"):
-        head = f":bell: {item['vendor']}  |  " + head
+        head = f"{VENDOR_EMOJI} {item['vendor']}  |  " + head
     if item.get("kev_ransomware"):
         head += "  |  ransomware"
     title_link = f"*<{item['url']}|{item['id']}>*\n{item['title']}" if item.get("url") else f"*{item['id']}*\n{item['title']}"
