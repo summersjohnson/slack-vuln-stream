@@ -21,6 +21,7 @@ Hourly automation that polls public vulnerability feeds and posts new items to a
 | CISA Cybersecurity Advisories | `cisa.gov/cybersecurity-advisories/all.xml` | Government-curated alerts (joint FBI/NSA bulletins, ICS, etc.) |
 | Microsoft MSRC | `api.msrc.microsoft.com/cvrf/v3.0/updates` | One summary per Patch Tuesday release (vuln counts) |
 | The Hacker News | `feeds.feedburner.com/TheHackersNews` | All-topics cybersecurity news feed (~5-10 articles/day) |
+| SANS Internet Storm Center | `isc.sans.edu/rssfeed.xml` | Handler diaries + daily Stormcast (~2-4 articles/day) |
 | OSV.dev | `api.osv.dev/v1/vulns/{id}` | Enrichment — adds affected ecosystems to CVE posts |
 | Vendor CNA tagging | NVD `sourceIdentifier` field | Tags posts from Adobe, Oracle, VMware, Broadcom, CrowdStrike |
 
