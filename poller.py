@@ -15,10 +15,14 @@ SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL")
 GH_TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
 NVD_API_KEY = os.environ.get("NVD_API_KEY")
 DRY_RUN = "--dry-run" in sys.argv
+TEST_SLACK = "--test-slack" in sys.argv
 
-LOOKBACK_HOURS = 1
+LOOKBACK_HOURS = 4
 OVERLAP_MINUTES = 15
 STATE_RETENTION_DAYS = 30
+# Cap items posted per run to prevent flooding on the first run after a long
+# outage. State dedup means subsequent runs will be small.
+MAX_POSTS_PER_RUN = 25
 USER_AGENT = "macmillan-vuln-stream/1.0 (security-monitoring)"
 
 # NVD sourceIdentifier values for the vendor CNAs we care about.
@@ -279,11 +283,25 @@ def post_to_slack(item):
 def main():
     if not DRY_RUN and not SLACK_WEBHOOK:
         sys.exit("SLACK_WEBHOOK_URL is not set")
+    if TEST_SLACK:
+        post_to_slack({
+            "source": "Pipeline Test",
+            "id": "TEST-0001",
+            "title": "If you see this, the Slack webhook is wired up correctly.",
+            "severity": "HIGH",
+            "url": "https://example.com/test",
+            "published": datetime.now(timezone.utc).isoformat(),
+            "cve": None,
+            "vendor": "Test",
+        })
+        return
     state = load_state()
     raw = []
     for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev):
         try:
-            raw.extend(fetcher())
+            results = fetcher()
+            print(f"[info] {fetcher.__name__}: {len(results)} item(s)")
+            raw.extend(results)
         except Exception as e:
             print(f"[error] {fetcher.__name__}: {e}", file=sys.stderr)
     items = dedup(raw)
@@ -299,6 +317,9 @@ def main():
         new_items.append(item)
         mark_seen(state, key)
     print(f"[info] {len(new_items)} new item(s) to post (from {len(items)} candidates)")
+    if len(new_items) > MAX_POSTS_PER_RUN:
+        print(f"[info] capping at {MAX_POSTS_PER_RUN}; remainder will be marked seen and skipped")
+        new_items = new_items[:MAX_POSTS_PER_RUN]
     for item in new_items:
         try:
             post_to_slack(item)
