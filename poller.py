@@ -19,13 +19,13 @@ DRY_RUN = "--dry-run" in sys.argv
 LOOKBACK_HOURS = 1
 OVERLAP_MINUTES = 15
 STATE_RETENTION_DAYS = 30
+USER_AGENT = "macmillan-vuln-stream/1.0 (security-monitoring)"
 
-VENDOR_FEEDS = [
-    {"vendor": "Adobe",       "url": "https://helpx.adobe.com/security/security-bulletin.rss"},
-    {"vendor": "Oracle",      "url": "https://www.oracle.com/security-alerts/rss.xml"},
-    {"vendor": "VMware",      "url": "https://support.broadcom.com/web/ecx/security-advisory/-/security-advisories.atom"},
-    {"vendor": "CrowdStrike", "url": "https://www.crowdstrike.com/en-us/blog/category/cybersecurity/feed/"},
-]
+# Adobe, Oracle, VMware/Broadcom, and CrowdStrike no longer publish working
+# public RSS for security advisories — they moved to HTML-only pages. All four
+# are CNAs, so their CRITICAL/HIGH advisories appear in NVD with vendor
+# attribution. See README. List kept empty until a working strategy is added.
+VENDOR_FEEDS: list[dict] = []
 
 
 def load_state():
@@ -57,7 +57,11 @@ def lookback_start():
 
 def fetch_github():
     items = []
-    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": USER_AGENT,
+    }
     if GH_TOKEN:
         headers["Authorization"] = f"Bearer {GH_TOKEN}"
     since = lookback_start().isoformat()
@@ -83,7 +87,9 @@ def fetch_github():
 
 def fetch_nvd():
     items = []
-    headers = {"apiKey": NVD_API_KEY} if NVD_API_KEY else {}
+    headers = {"User-Agent": USER_AGENT}
+    if NVD_API_KEY:
+        headers["apiKey"] = NVD_API_KEY
     end = datetime.now(timezone.utc)
     start = lookback_start()
     fmt = "%Y-%m-%dT%H:%M:%S.000"
@@ -96,6 +102,9 @@ def fetch_nvd():
         }
         r = requests.get("https://services.nvd.nist.gov/rest/json/cves/2.0",
                          headers=headers, params=params, timeout=60)
+        # NVD returns 404 instead of 200/empty when no records match a tight window.
+        if r.status_code == 404:
+            continue
         r.raise_for_status()
         for vuln in r.json().get("vulnerabilities", []):
             cve = vuln["cve"]
@@ -123,7 +132,8 @@ def fetch_cve_program():
 
 def osv_enrich(cve_id):
     try:
-        r = requests.get(f"https://api.osv.dev/v1/vulns/{cve_id}", timeout=15)
+        r = requests.get(f"https://api.osv.dev/v1/vulns/{cve_id}",
+                         headers={"User-Agent": USER_AGENT}, timeout=15)
         if r.status_code != 200:
             return []
         affected = r.json().get("affected", [])
