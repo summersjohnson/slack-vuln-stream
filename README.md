@@ -18,6 +18,8 @@ Hourly automation that polls public vulnerability feeds and posts new CRITICAL /
 | GitHub Security Advisories | `api.github.com/advisories` | Primary feed for ecosystem-level CVEs |
 | NVD | `services.nvd.nist.gov/rest/json/cves/2.0` | Canonical CVE source (covers CVE Program data) |
 | CISA KEV | `cisa.gov/.../known_exploited_vulnerabilities.json` | Actively-exploited-in-the-wild flag |
+| CISA Cybersecurity Advisories | `cisa.gov/cybersecurity-advisories/all.xml` | Government-curated alerts (joint FBI/NSA bulletins, ICS, etc.) |
+| Microsoft MSRC | `api.msrc.microsoft.com/cvrf/v3.0/updates` | One summary per Patch Tuesday release (vuln counts) |
 | OSV.dev | `api.osv.dev/v1/vulns/{id}` | Enrichment — adds affected ecosystems to CVE posts |
 | Vendor CNA tagging | NVD `sourceIdentifier` field | Tags posts from Adobe, Oracle, VMware, Broadcom, CrowdStrike |
 

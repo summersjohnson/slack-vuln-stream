@@ -40,6 +40,8 @@ NVD_VENDOR_ASSIGNERS = {
 VENDOR_FEEDS: list[dict] = []
 
 KEV_FEED_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+CISA_FEED_URL = "https://www.cisa.gov/cybersecurity-advisories/all.xml"
+MSRC_UPDATES_URL = "https://api.msrc.microsoft.com/cvrf/v3.0/updates"
 
 
 def load_state():
@@ -197,6 +199,91 @@ def osv_enrich(cve_id):
         return []
 
 
+def fetch_cisa():
+    items = []
+    try:
+        r = requests.get(CISA_FEED_URL, headers={"User-Agent": USER_AGENT}, timeout=30)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[warn] CISA fetch failed: {e}", file=sys.stderr)
+        return items
+    parsed = feedparser.parse(r.content)
+    if parsed.bozo and not parsed.entries:
+        print(f"[warn] CISA parse error: {parsed.get('bozo_exception')}", file=sys.stderr)
+        return items
+    since = lookback_start()
+    for entry in parsed.entries:
+        tm = entry.get("published_parsed") or entry.get("updated_parsed")
+        if not tm:
+            continue
+        published = datetime(*tm[:6], tzinfo=timezone.utc)
+        if published < since:
+            continue
+        items.append({
+            "source": "CISA Cybersecurity Advisories",
+            "id": entry.get("id") or entry.get("link") or entry.get("title", ""),
+            "title": entry.get("title", "(untitled)")[:300],
+            "severity": "ADVISORY",
+            "url": entry.get("link", ""),
+            "published": published.isoformat(),
+            "cve": None,
+        })
+    return items
+
+
+def fetch_msrc():
+    # MSRC publishes monthly (Patch Tuesday) plus occasional out-of-band.
+    # We post one summary per release rather than per-CVE to avoid flooding.
+    items = []
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    try:
+        r = requests.get(MSRC_UPDATES_URL, headers=headers, timeout=30)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[warn] MSRC updates fetch failed: {e}", file=sys.stderr)
+        return items
+    since = lookback_start()
+    for upd in r.json().get("value", []):
+        try:
+            released = datetime.strptime(upd["InitialReleaseDate"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except (KeyError, ValueError):
+            continue
+        if released < since:
+            continue
+        cvrf_url = upd.get("CvrfUrl")
+        if not cvrf_url:
+            continue
+        try:
+            r2 = requests.get(cvrf_url, headers=headers, timeout=60)
+            r2.raise_for_status()
+            vulns = r2.json().get("Vulnerability", [])
+        except requests.RequestException as e:
+            print(f"[warn] MSRC cvrf fetch {upd.get('ID')}: {e}", file=sys.stderr)
+            continue
+        crit = high = 0
+        for v in vulns:
+            score = max((s.get("BaseScore", 0) for s in v.get("CVSSScoreSets", [])), default=0)
+            if score >= 9.0:
+                crit += 1
+            elif score >= 7.0:
+                high += 1
+        if crit == 0 and high == 0:
+            continue
+        sev = "CRITICAL" if crit > 0 else "HIGH"
+        title = f"{upd.get('DocumentTitle', upd['ID'])}: {len(vulns)} vulns ({crit} CRITICAL, {high} HIGH)"
+        items.append({
+            "source": "Microsoft MSRC",
+            "id": f"MSRC-{upd['ID']}",
+            "title": title[:300],
+            "severity": sev,
+            "url": f"https://msrc.microsoft.com/update-guide/releaseNote/{upd['ID']}",
+            "published": upd["InitialReleaseDate"],
+            "cve": None,
+            "vendor": "Microsoft",
+        })
+    return items
+
+
 def fetch_vendors():
     items = []
     since = lookback_start()
@@ -252,7 +339,7 @@ def dedup(items):
 
 
 def slack_blocks(item):
-    emoji = {"CRITICAL": ":rotating_light:", "HIGH": ":warning:", "KEV": ":fire:"}
+    emoji = {"CRITICAL": ":rotating_light:", "HIGH": ":warning:", "KEV": ":fire:", "ADVISORY": ":mega:"}
     head = f"{emoji.get(item['severity'], ':grey_question:')} {item['severity']} — {item['source']}"
     if item.get("vendor"):
         head = f":bell: {item['vendor']}  |  " + head
@@ -305,7 +392,7 @@ def main():
         return
     state = load_state()
     raw = []
-    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev):
+    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev, fetch_cisa, fetch_msrc):
         try:
             results = fetcher()
             print(f"[info] {fetcher.__name__}: {len(results)} item(s)")
