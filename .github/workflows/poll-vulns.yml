@@ -30,6 +30,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
         run: python poller.py
 
       - name: Commit updated state

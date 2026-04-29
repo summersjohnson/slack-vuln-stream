@@ -22,6 +22,7 @@ Hourly automation that polls public vulnerability feeds and posts new items to a
 | Microsoft MSRC | `api.msrc.microsoft.com/cvrf/v3.0/updates` | One summary per Patch Tuesday release (vuln counts) |
 | The Hacker News | `feeds.feedburner.com/TheHackersNews` | All-topics cybersecurity news feed (~5-10 articles/day) |
 | SANS Internet Storm Center | `isc.sans.edu/rssfeed.xml` | Handler diaries + daily Stormcast (~2-4 articles/day) |
+| AlienVault OTX | `otx.alienvault.com/api/v1/pulses/subscribed` | Subscribed threat-intel pulses (IoCs, adversaries, malware families) |
 | OSV.dev | `api.osv.dev/v1/vulns/{id}` | Enrichment — adds affected ecosystems to CVE posts |
 | Vendor CNA tagging | NVD `sourceIdentifier` field | Tags posts from Adobe, Oracle, VMware, Broadcom, CrowdStrike |
 
@@ -33,7 +34,7 @@ Note: those four vendors no longer publish working public RSS for security advis
 - **Within-run dedup:** GHSA + NVD entries for the same CVE merge into one post (NVD wins, vendor tag preserved).
 - **Cross-run dedup:** KEV entries use a distinct dedup key, so a CVE can post twice — once when it lands in NVD/GHSA, again when CISA promotes it to "actively exploited."
 - **Slack header:** `[🔔 Vendor | ] <severity-emoji> <SEVERITY> — <Source> [ | ransomware]`
-- **Severity emoji:** 🚨 CRITICAL · ⚠️ HIGH · 🔥 KEV · 📣 ADVISORY (CISA general) · 📰 NEWS (The Hacker News)
+- **Severity emoji:** 🚨 CRITICAL · ⚠️ HIGH · 🔥 KEV · 📣 ADVISORY (CISA general) · 📰 NEWS (The Hacker News, SANS) · 🕵️ INTEL (AlienVault OTX)
 - **Body fields:** CVE ID, publication date, affected ecosystems (from OSV enrichment)
 
 ## Repo structure
@@ -51,6 +52,7 @@ state.json                      Dedup state (auto-managed)
 | Name | Required | Purpose |
 |---|---|---|
 | `SLACK_WEBHOOK_URL` | yes | Incoming Webhook URL for the channel |
+| `OTX_API_KEY` | no | Enables AlienVault OTX subscribed pulses; skipped silently if absent |
 | `NVD_API_KEY` | no | Higher NVD rate limit; script works without it |
 | `GITHUB_TOKEN` | auto | Provided by Actions; raises GHSA rate limit |
 

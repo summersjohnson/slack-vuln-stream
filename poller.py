@@ -14,6 +14,7 @@ STATE_FILE = ROOT / "state.json"
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL")
 GH_TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
 NVD_API_KEY = os.environ.get("NVD_API_KEY")
+OTX_API_KEY = os.environ.get("OTX_API_KEY")
 DRY_RUN = "--dry-run" in sys.argv
 TEST_SLACK = "--test-slack" in sys.argv
 
@@ -37,6 +38,7 @@ SEVERITY_EMOJI = {
     "KEV":      ":fire:",
     "ADVISORY": ":mega:",
     "NEWS":     ":newspaper:",
+    "INTEL":    ":detective:",
 }
 # Decorations layered onto the header in slack_blocks():
 #   :bell:  prepended when item came from a tracked vendor CNA (Adobe, Oracle,
@@ -65,6 +67,8 @@ MSRC_UPDATES_URL = "https://api.msrc.microsoft.com/cvrf/v3.0/updates"
 THN_FEED_URL = "https://feeds.feedburner.com/TheHackersNews"
 # SANS Internet Storm Center — handler diaries + daily Stormcast (~2-4/day).
 SANS_FEED_URL = "https://isc.sans.edu/rssfeed.xml"
+# AlienVault OTX — subscribed pulses (threat intel from sources you follow).
+OTX_API_URL = "https://otx.alienvault.com/api/v1/pulses/subscribed"
 
 
 def load_state():
@@ -290,6 +294,50 @@ def fetch_hackernews():
     return items
 
 
+def fetch_otx():
+    items = []
+    if not OTX_API_KEY:
+        return items
+    headers = {"X-OTX-API-KEY": OTX_API_KEY, "User-Agent": USER_AGENT}
+    try:
+        r = requests.get(OTX_API_URL, headers=headers,
+                         params={"page": 1, "limit": 50}, timeout=30)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[warn] OTX fetch failed: {e}", file=sys.stderr)
+        return items
+    since = news_lookback_start()
+    for pulse in r.json().get("results", []):
+        ts = pulse.get("modified") or pulse.get("created", "")
+        try:
+            modified = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if modified.tzinfo is None:
+                modified = modified.replace(tzinfo=timezone.utc)
+        except (ValueError, AttributeError):
+            continue
+        if modified < since:
+            continue
+        author = pulse.get("author_name", "")
+        title = pulse.get("name", "(untitled)")
+        if author:
+            title = f"{title} — by {author}"
+        malware = [mf if isinstance(mf, str) else mf.get("display_name", "")
+                   for mf in pulse.get("malware_families", []) or []]
+        items.append({
+            "source": "AlienVault OTX",
+            "id": pulse.get("id", ""),
+            "title": title[:300],
+            "severity": "INTEL",
+            "url": f"https://otx.alienvault.com/pulse/{pulse.get('id', '')}",
+            "published": modified.isoformat(),
+            "cve": None,
+            "tags": (pulse.get("tags") or [])[:5],
+            "adversary": pulse.get("adversary") or None,
+            "malware_families": [m for m in malware if m][:3],
+        })
+    return items
+
+
 def fetch_sans():
     items = []
     try:
@@ -447,6 +495,12 @@ def slack_blocks(item):
         fields.append({"type": "mrkdwn", "text": f"*Published:* {item['published']}"})
     if item.get("ecosystems"):
         fields.append({"type": "mrkdwn", "text": f"*Ecosystems:* {', '.join(item['ecosystems'])}"})
+    if item.get("adversary"):
+        fields.append({"type": "mrkdwn", "text": f"*Adversary:* {item['adversary']}"})
+    if item.get("malware_families"):
+        fields.append({"type": "mrkdwn", "text": f"*Malware:* {', '.join(item['malware_families'])}"})
+    if item.get("tags"):
+        fields.append({"type": "mrkdwn", "text": f"*Tags:* {', '.join(item['tags'])}"})
     if fields:
         blocks.append({"type": "section", "fields": fields})
     return blocks
@@ -482,7 +536,7 @@ def main():
         return
     state = load_state()
     raw = []
-    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev, fetch_cisa, fetch_msrc, fetch_hackernews, fetch_sans):
+    for fetcher in (fetch_github, fetch_nvd, fetch_cve_program, fetch_vendors, fetch_kev, fetch_cisa, fetch_msrc, fetch_hackernews, fetch_sans, fetch_otx):
         try:
             results = fetcher()
             print(f"[info] {fetcher.__name__}: {len(results)} item(s)")
