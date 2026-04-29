@@ -1,5 +1,8 @@
 {
   "seen_ids": {
+    "69f05d291d899793ddba04f9": "2026-04-29T00:11:38.118215+00:00",
+    "69f06a838f5dae965dd8cbfd": "2026-04-29T00:11:38.118217+00:00",
+    "69f06bcd55d11c96e260dbdd": "2026-04-29T00:11:38.118219+00:00",
     "CVE-2025-48431": "2026-04-28T15:52:18.961801+00:00",
     "CVE-2025-67223": "2026-04-28T19:08:02.411128+00:00",
     "CVE-2026-24178": "2026-04-28T22:00:47.971547+00:00",
@@ -32,8 +35,17 @@
     "CVE-2026-7320": "2026-04-28T19:08:01.748651+00:00",
     "CVE-2026-7321": "2026-04-28T15:52:16.716885+00:00",
     "CVE-2026-7324": "2026-04-28T19:08:01.474590+00:00",
+    "https://isc.sans.edu/diary/rss/32928": "2026-04-29T00:11:38.118213+00:00",
+    "https://isc.sans.edu/diary/rss/32930": "2026-04-29T00:11:38.118211+00:00",
+    "https://thehackernews.com/2026/04/after-mythos-new-playbooks-for-zero.html": "2026-04-29T00:11:38.118177+00:00",
     "https://thehackernews.com/2026/04/brazilian-lofygang-resurfaces-after.html": "2026-04-28T19:08:02.692070+00:00",
+    "https://thehackernews.com/2026/04/chinese-silk-typhoon-hacker-extradited.html": "2026-04-29T00:11:38.118180+00:00",
+    "https://thehackernews.com/2026/04/critical-cve-2026-25874-leaves-hugging.html": "2026-04-29T00:11:38.118175+00:00",
+    "https://thehackernews.com/2026/04/microsoft-confirms-active-exploitation.html": "2026-04-29T00:11:38.118184+00:00",
+    "https://thehackernews.com/2026/04/microsoft-patches-entra-id-role-flaw.html": "2026-04-29T00:11:38.118182+00:00",
     "https://thehackernews.com/2026/04/researchers-discover-critical-github.html": "2026-04-28T19:08:02.692066+00:00",
+    "https://thehackernews.com/2026/04/vect-20-ransomware-irreversibly.html": "2026-04-29T00:11:38.118163+00:00",
+    "https://thehackernews.com/2026/04/why-secure-data-movement-is-zero-trust.html": "2026-04-29T00:11:38.118172+00:00",
     "kev:CVE-2024-1708": "2026-04-28T18:19:50.707201+00:00",
     "kev:CVE-2026-32202": "2026-04-28T18:19:50.904129+00:00"
   }
